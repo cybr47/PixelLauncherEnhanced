@@ -7,6 +7,7 @@ import com.drdisagree.pixellauncherenhanced.data.common.Constants.APP_BLOCK_LIST
 import com.drdisagree.pixellauncherenhanced.data.common.Constants.SEARCH_HIDDEN_APPS
 import com.drdisagree.pixellauncherenhanced.xposed.ModPack
 import com.drdisagree.pixellauncherenhanced.xposed.mods.LauncherUtils.Companion.reloadLauncher
+import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.XposedHook.Companion.findClass
 import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.*
 import com.drdisagree.pixellauncherenhanced.xposed.utils.XPrefs.Xprefs
 import de.robv.android.xposed.XC_MethodHook
@@ -29,7 +30,10 @@ class HideApps(context: Context) : ModPack(context) {
             appBlockList = getStringSet(APP_BLOCK_LIST, emptySet())!!
             searchHiddenApps = getBoolean(SEARCH_HIDDEN_APPS, false)
         }
-        if (key.firstOrNull() == APP_BLOCK_LIST) updateLauncherIcons()
+
+        if (key.firstOrNull() == APP_BLOCK_LIST) {
+            updateLauncherIcons()
+        }
     }
 
     override fun handleLoadPackage(loadPackageParam: LoadPackageParam) {
@@ -55,6 +59,7 @@ class HideApps(context: Context) : ModPack(context) {
             )
         val launcherModelClass =
             findClass("com.android.launcher3.LauncherModel")
+
         val baseModelUpdateTaskClass =
             findClass(
                 "com.android.launcher3.model.BaseModelUpdateTask",
@@ -64,12 +69,15 @@ class HideApps(context: Context) : ModPack(context) {
         activityAllAppsContainerViewClass.hookConstructor().runAfter {
             activityAllAppsContainerViewInstance = it.thisObject
         }
+
         hotseatPredictionControllerClass.hookConstructor().runAfter {
             hotseatPredictionControllerInstance = it.thisObject
         }
+
         hybridHotseatOrganizerClass?.hookConstructor()?.runAfter {
             hybridHotseatOrganizerInstance = it.thisObject
         }
+
         predictionRowViewClass.hookConstructor().runAfter {
             predictionRowViewInstance = it.thisObject
         }
@@ -84,8 +92,11 @@ class HideApps(context: Context) : ModPack(context) {
             .hookMethod("getApp")
             .runBefore { param ->
                 val componentKey = param.args[0]
-                val comparator = if (param.args.size > 1) param.args[1]
-                else appInfoClass.getStaticField("COMPONENT_KEY_COMPARATOR")
+                val comparator = if (param.args.size > 1) {
+                    param.args[1]
+                } else {
+                    appInfoClass.getStaticField("COMPONENT_KEY_COMPARATOR")
+                } as Comparator<Any?>
 
                 val apps =
                     param.thisObject.getExtraFieldSilently("mAppsBackup") as? Array<*> ?: return@runBefore
@@ -99,7 +110,7 @@ class HideApps(context: Context) : ModPack(context) {
                     setField("user", user)
                 }
 
-                val index = Arrays.binarySearch(apps, tempInfo, comparator as Comparator<Any?>)
+                val index = Arrays.binarySearch(apps, tempInfo, comparator)
                 param.result = if (index >= 0) apps[index] else null
             }
 
@@ -108,13 +119,20 @@ class HideApps(context: Context) : ModPack(context) {
             .runAfter { param ->
                 val items =
                     (param.thisObject.getField("mAdapterItems") as ArrayList<*>).toMutableList()
-                items.removeIf {
-                    matchesBlocklist(
-                        it.getFieldSilently("itemInfo")
+
+                val iterator = items.iterator()
+                while (iterator.hasNext()) {
+                    val item = iterator.next()
+                    val pkg =
+                        item.getFieldSilently("itemInfo")
                             ?.getComponentName()
                             ?.packageName
-                    )
+
+                    if (matchesBlocklist(pkg)) {
+                        iterator.remove()
+                    }
                 }
+
                 param.thisObject.setField("mAdapterItems", ArrayList(items))
             }
 
@@ -129,6 +147,7 @@ class HideApps(context: Context) : ModPack(context) {
                 list.removeIf {
                     matchesBlocklist(it.getComponentName()?.packageName)
                 }
+
                 param.args[index] = list
             }
 
@@ -139,7 +158,7 @@ class HideApps(context: Context) : ModPack(context) {
 
                 val task = param.args[0]
                 if (baseModelUpdateTaskClass == null ||
-                    task::class.java.simpleName != baseModelUpdateTaskClass.simpleName
+                    task::class.java.name != baseModelUpdateTaskClass.name
                 ) return@runBefore
 
                 task::class.java
@@ -153,6 +172,7 @@ class HideApps(context: Context) : ModPack(context) {
                         data.removeIf {
                             matchesBlocklist(it.getComponentName()?.packageName)
                         }
+
                         apps.setField("data", data)
                     }
             }
@@ -162,20 +182,24 @@ class HideApps(context: Context) : ModPack(context) {
             .runBefore { param ->
                 val list =
                     (param.thisObject.getField("mPredictedApps") as ArrayList<*>).toMutableList()
+
                 list.removeIf {
                     matchesBlocklist(it.getComponentName()?.packageName)
                 }
+
                 param.thisObject.setField("mPredictedApps", ArrayList(list))
             }
     }
 
-    private fun matchesBlocklist(pkg: String?): Boolean =
-        !pkg.isNullOrEmpty() && appBlockList.contains(pkg)
+    private fun matchesBlocklist(pkg: String?): Boolean {
+        return !pkg.isNullOrEmpty() && appBlockList.contains(pkg)
+    }
 
-    private fun Any?.getComponentName(): ComponentName? =
-        getFieldSilently("componentName") as? ComponentName
+    private fun Any?.getComponentName(): ComponentName? {
+        return getFieldSilently("componentName") as? ComponentName
             ?: getFieldSilently("mComponentName") as? ComponentName
             ?: runCatching { callMethod("getTargetComponent") as ComponentName }.getOrNull()
+    }
 
     private fun updateLauncherIcons() {
         activityAllAppsContainerViewInstance?.callMethod("onAppsUpdated")
