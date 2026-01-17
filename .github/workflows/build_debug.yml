@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: Build Debug APK
-    if: github.repository_owner == 'Mahmud0808'
+    if: github.repository_owner == 'cybr47'
     runs-on: ubuntu-latest
 
     steps:
@@ -26,7 +26,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Write sign info
-        if: github.repository == 'Mahmud0808/PixelLauncherEnhanced'
+        if: github.repository == 'cybr47/PixelLauncherEnhanced'
         run: |
           if [ ! -z "${{ secrets.KEYSTORE }}" ]; then
             echo storePassword='${{ secrets.KEYSTORE_PASSWORD }}' >> keystore.properties
