@@ -1,3 +1,4 @@
+NOT ACTIVELY MAINTAINED 
 ![HEAD](https://socialify.git.ci/Mahmud0808/PixelLauncherEnhanced/image?description=1&font=Jost&forks=1&issues=1&logo=https%3A%2F%2Fi.postimg.cc%2FmgfNTCbc%2Fpixel-launcher-enhanced.png&name=1&owner=1&pattern=Formal+Invitation&pulls=1&stargazers=1&theme=Auto)
 
 <p align="center">
