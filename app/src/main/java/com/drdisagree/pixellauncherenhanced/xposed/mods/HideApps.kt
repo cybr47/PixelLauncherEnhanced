@@ -22,7 +22,6 @@ import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.setField
 import com.drdisagree.pixellauncherenhanced.xposed.utils.XPrefs.Xprefs
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
-import java.lang.reflect.Modifier
 import java.util.Arrays
 
 class HideApps(context: Context) : ModPack(context) {
@@ -56,10 +55,6 @@ class HideApps(context: Context) : ModPack(context) {
             "com.android.launcher3.util.HybridHotseatOrganizer",
             suppressError = true
         )
-		val baseModelUpdateTaskClass = 
-		    findClass( "com.android.launcher3.model.BaseModelUpdateTask")
-			suppressError = Build.VERSION.SDK_INT >= 36
-		)
         val predictionRowViewClass =
             findClass("com.android.launcher3.appprediction.PredictionRowView")
         val defaultAppSearchAlgorithmClass = findClass(
@@ -72,6 +67,10 @@ class HideApps(context: Context) : ModPack(context) {
         val appInfoClass = findClass("com.android.launcher3.model.data.AppInfo")
         val allAppsListClass = findClass("com.android.launcher3.model.AllAppsList")
         val launcherModelClass = findClass("com.android.launcher3.LauncherModel")
+        val baseModelUpdateTaskClass = findClass(
+            "com.android.launcher3.model.BaseModelUpdateTask",
+            suppressError = Build.VERSION.SDK_INT >= 36
+        )
 
         invariantDeviceProfileClass
             .hookConstructor()
@@ -187,36 +186,35 @@ class HideApps(context: Context) : ModPack(context) {
                 }
         } catch (_: Throwable) {
             // Inline changes for testing
-            
-                launcherModelClass
-                    .hookMethod("enqueueModelUpdateTask")
-                    .runBefore { param ->
-                        val modelUpdateTask = param.args.getOrNull(0) ?: return@runBefore
 
-                        if (baseModelUpdateTaskClass != null &&
-                            modelUpdateTask::class.java.simpleName != baseModelUpdateTaskClass.simpleName
-                        ) return@runBefore
+            launcherModelClass
+                .hookMethod("enqueueModelUpdateTask")
+                .runBefore { param ->
+                    val modelUpdateTask = param.args.getOrNull(0) ?: return@runBefore
 
-                        modelUpdateTask::class.java
-                            .hookMethod("execute")
-                            .runBefore { param2 ->
-						    	if (searchHiddenApps) return@runBefore
-								
-								val appsIndex = param2.args.indexOfFirst {
-									it?.javaClass?.simpleName == allAppsListClass?.simpleName
-								}
-								if (appsIndex < 0) return@runBefore
-								
-								val apps = param2.args[appsIndex] ?: return@runBefore
-								val data = apps.getField("data") as? MutableList<*> ?: return@runBefore
-								
-								val iterator = data.iterator()
-								iterator.removeMatches()
-								
-								apps.setField("data", data)
+                    if (baseModelUpdateTaskClass != null &&
+                        modelUpdateTask::class.java.simpleName != baseModelUpdateTaskClass.simpleName
+                    ) return@runBefore
+
+                    modelUpdateTask::class.java
+                        .hookMethod("execute")
+                        .runBefore { param2 ->
+                            if (searchHiddenApps) return@runBefore
+
+                            val appsIndex = param2.args.indexOfFirst {
+                                it?.javaClass?.simpleName == allAppsListClass?.simpleName
                             }
-                    }
-            }
+                            if (appsIndex < 0) return@runBefore
+
+                            val apps = param2.args[appsIndex] ?: return@runBefore
+                            val data = apps.getField("data") as? MutableList<*> ?: return@runBefore
+
+                            val iterator = data.iterator()
+                            iterator.removeMatches()
+
+                            apps.setField("data", data)
+                        }
+                }
         }
 
         alphabeticalAppsListClass
@@ -281,6 +279,7 @@ class HideApps(context: Context) : ModPack(context) {
                 appInfoClass,
                 mApps.size
             ) as Array<*>
+
             System.arraycopy(mApps.toTypedArray(), 0, appInfoArray, 0, mApps.size)
 
             mAllAppsStore.setField("mApps", appInfoArray)
