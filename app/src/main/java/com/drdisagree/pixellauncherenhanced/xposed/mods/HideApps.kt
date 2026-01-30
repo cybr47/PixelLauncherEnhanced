@@ -22,6 +22,7 @@ import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.setField
 import com.drdisagree.pixellauncherenhanced.xposed.utils.XPrefs.Xprefs
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import java.lang.reflect.Modifier
 import java.util.Arrays
 
 class HideApps(context: Context) : ModPack(context) {
@@ -53,6 +54,7 @@ class HideApps(context: Context) : ModPack(context) {
         val alphabeticalAppsListClass = findClass("com.android.launcher3.allapps.AlphabeticalAppsList")
         val allAppsStoreClass = findClass("com.android.launcher3.allapps.AllAppsStore")
         val appInfoClass = findClass("com.android.launcher3.model.data.AppInfo")
+        val allAppsListClass = findClass("com.android.launcher3.model.AllAppsList")
         val defaultSearchClass = findClass(
             "com.android.launcher3.allapps.DefaultAppSearchAlgorithm",
             "com.android.launcher3.allapps.search.DefaultAppSearchAlgorithm"
@@ -204,6 +206,10 @@ class HideApps(context: Context) : ModPack(context) {
 
     private fun matchesBlocklist(pkg: String?): Boolean {
         return !pkg.isNullOrEmpty() && appBlockList.contains(pkg)
+    }
+
+    private fun matchesBlocklist(componentName: ComponentName?): Boolean {
+        return matchesBlocklist(componentName?.packageName)
     }
 
     private fun updateLauncherIcons() {
