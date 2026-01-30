@@ -56,6 +56,10 @@ class HideApps(context: Context) : ModPack(context) {
             "com.android.launcher3.util.HybridHotseatOrganizer",
             suppressError = true
         )
+		val baseModelUpdateTaskClass = 
+		    findClass( "com.android.launcher3.model.BaseModelUpdateTask")
+			suppressError = Build.VERSION.SDK_INT >= 36
+		)
         val predictionRowViewClass =
             findClass("com.android.launcher3.appprediction.PredictionRowView")
         val defaultAppSearchAlgorithmClass = findClass(
@@ -182,51 +186,12 @@ class HideApps(context: Context) : ModPack(context) {
                     param.args[index] = ArrayList(apps)
                 }
         } catch (_: Throwable) {
-            // Method seems to be unused on newer versions of pixel launcher
-            // But still hook it just in case
-
-            fun removeAppResult(param: XC_MethodHook.MethodHookParam) {
-                if (searchHiddenApps) return
-
-                val appsIndex = param.args.indexOfFirst {
-                    it::class.java.simpleName == allAppsListClass!!.simpleName
-                }
-
-                val apps = param.args[appsIndex]
-                val data = apps.getField("data") as ArrayList<*>
-
-                val iterator = data.iterator()
-                iterator.removeMatches()
-
-                apps.setField("data", ArrayList(data))
-                param.args[appsIndex] = apps
-            }
-
-            val methodName = (defaultAppSearchAlgorithmClass!!.declaredMethods.toList()
-                .union(defaultAppSearchAlgorithmClass.methods.toList()))
-                .firstOrNull { method ->
-                    Modifier.isStatic(method.modifiers) &&
-                            method.parameterTypes.any { it == String::class.java } &&
-                            method.parameterTypes.any { it.simpleName == allAppsListClass!!.simpleName } &&
-                            method.parameterCount >= 2
-                }?.name
-
-            if (methodName != null) {
-                defaultAppSearchAlgorithmClass
-                    .hookMethod(methodName)
-                    .runBefore { param ->
-                        removeAppResult(param)
-                    }
-            } else {
-                val baseModelUpdateTaskClass = findClass(
-                    "com.android.launcher3.model.BaseModelUpdateTask",
-                    suppressError = Build.VERSION.SDK_INT >= 36
-                )
-
+            // Inline changes for testing
+            
                 launcherModelClass
                     .hookMethod("enqueueModelUpdateTask")
                     .runBefore { param ->
-                        val modelUpdateTask = param.args[0]
+                        val modelUpdateTask = param.args.getOrNull(0) ?: return@runBefore
 
                         if (baseModelUpdateTaskClass != null &&
                             modelUpdateTask::class.java.simpleName != baseModelUpdateTaskClass.simpleName
@@ -235,7 +200,20 @@ class HideApps(context: Context) : ModPack(context) {
                         modelUpdateTask::class.java
                             .hookMethod("execute")
                             .runBefore { param2 ->
-                                removeAppResult(param2)
+						    	if (searchHiddenApps) return@runBefore
+								
+								val appsIndex = param2.args.indexOfFirst {
+									it?.javaClass?.simpleName == allAppsListClass?.simpleName
+								}
+								if (appsIndex < 0) return@runBefore
+								
+								val apps = param2.args[appsIndex] ?: return@runBefore
+								val data = apps.getField("data") as? MutableList<*> ?: return@runBefore
+								
+								val iterator = data.iterator()
+								iterator.removeMatches()
+								
+								apps.setField("data", data)
                             }
                     }
             }
