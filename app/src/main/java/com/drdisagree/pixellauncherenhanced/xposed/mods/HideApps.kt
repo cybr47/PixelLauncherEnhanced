@@ -22,6 +22,7 @@ import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.setField
 import com.drdisagree.pixellauncherenhanced.xposed.utils.XPrefs.Xprefs
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import java.lang.reflect.Modifier
 import java.util.Arrays
 
 class HideApps(context: Context) : ModPack(context) {
@@ -47,56 +48,37 @@ class HideApps(context: Context) : ModPack(context) {
 
     override fun handleLoadPackage(loadPackageParam: LoadPackageParam) {
         val invariantDeviceProfileClass = findClass("com.android.launcher3.InvariantDeviceProfile")
-        val activityAllAppsContainerViewClass =
-            findClass("com.android.launcher3.allapps.ActivityAllAppsContainerView")
-        val hotseatPredictionControllerClass =
-            findClass("com.android.launcher3.hybridhotseat.HotseatPredictionController")
-        val hybridHotseatOrganizerClass = findClass(
-            "com.android.launcher3.util.HybridHotseatOrganizer",
-            suppressError = true
-        )
-        val predictionRowViewClass =
-            findClass("com.android.launcher3.appprediction.PredictionRowView")
+        val activityAllAppsContainerViewClass = findClass("com.android.launcher3.allapps.ActivityAllAppsContainerView")
+        val hotseatPredictionControllerClass = findClass("com.android.launcher3.hybridhotseat.HotseatPredictionController")
+        val hybridHotseatOrganizerClass = findClass("com.android.launcher3.util.HybridHotseatOrganizer", suppressError = true)
+        val predictionRowViewClass = findClass("com.android.launcher3.appprediction.PredictionRowView")
+
         val defaultAppSearchAlgorithmClass = findClass(
             "com.android.launcher3.allapps.DefaultAppSearchAlgorithm",
             "com.android.launcher3.allapps.search.DefaultAppSearchAlgorithm"
         )
-        val alphabeticalAppsListClass =
-            findClass("com.android.launcher3.allapps.AlphabeticalAppsList")
+
+        val alphabeticalAppsListClass = findClass("com.android.launcher3.allapps.AlphabeticalAppsList")
         val allAppsStoreClass = findClass("com.android.launcher3.allapps.AllAppsStore")
         val appInfoClass = findClass("com.android.launcher3.model.data.AppInfo")
         val allAppsListClass = findClass("com.android.launcher3.model.AllAppsList")
         val launcherModelClass = findClass("com.android.launcher3.LauncherModel")
+
         val baseModelUpdateTaskClass = findClass(
             "com.android.launcher3.model.BaseModelUpdateTask",
             suppressError = Build.VERSION.SDK_INT >= 36
         )
 
-        invariantDeviceProfileClass
-            .hookConstructor()
-            .runAfter { param -> invariantDeviceProfileInstance = param.thisObject }
-
-        activityAllAppsContainerViewClass
-            .hookConstructor()
-            .runAfter { param -> activityAllAppsContainerViewInstance = param.thisObject }
-
-        hotseatPredictionControllerClass
-            .hookConstructor()
-            .runAfter { param -> hotseatPredictionControllerInstance = param.thisObject }
-
-        hybridHotseatOrganizerClass
-            .hookConstructor()
-            .runAfter { param -> hybridHotseatOrganizerClassInstance = param.thisObject }
-
-        predictionRowViewClass
-            .hookConstructor()
-            .runAfter { param -> predictionRowViewInstance = param.thisObject }
+        invariantDeviceProfileClass.hookConstructor().runAfter { param -> invariantDeviceProfileInstance = param.thisObject }
+        activityAllAppsContainerViewClass.hookConstructor().runAfter { param -> activityAllAppsContainerViewInstance = param.thisObject }
+        hotseatPredictionControllerClass.hookConstructor().runAfter { param -> hotseatPredictionControllerInstance = param.thisObject }
+        hybridHotseatOrganizerClass?.hookConstructor()?.runAfter { param -> hybridHotseatOrganizerClassInstance = param.thisObject }
+        predictionRowViewClass.hookConstructor().runAfter { param -> predictionRowViewInstance = param.thisObject }
 
         allAppsStoreClass
             .hookMethod("setApps")
             .runAfter { param ->
                 val apps = param.args[0]
-
                 if (apps != null) {
                     param.thisObject.setExtraField("mAppsBackup", apps)
                 }
@@ -113,8 +95,7 @@ class HideApps(context: Context) : ModPack(context) {
                     appInfoClass.getStaticField("COMPONENT_KEY_COMPARATOR")
                 } as Comparator<Any?>
 
-                val mApps = param.thisObject.getExtraFieldSilently("mAppsBackup") as? Array<*>
-                    ?: return@runBefore
+                val mApps = param.thisObject.getExtraFieldSilently("mAppsBackup") as? Array<*> ?: return@runBefore
 
                 val componentName = componentKey.getFieldSilently("componentName") as? ComponentName
                 val user = componentKey.getFieldSilently("user")
@@ -136,12 +117,9 @@ class HideApps(context: Context) : ModPack(context) {
         predictionRowViewClass
             .hookMethod("applyPredictionApps")
             .runBefore { param ->
-                val mPredictedApps =
-                    (param.thisObject.getField("mPredictedApps") as ArrayList<*>).toMutableList()
-
+                val mPredictedApps = (param.thisObject.getField("mPredictedApps") as ArrayList<*>).toMutableList()
                 val iterator = mPredictedApps.iterator()
                 iterator.removeMatches()
-
                 param.thisObject.setField("mPredictedApps", ArrayList(mPredictedApps))
             }
 
@@ -150,9 +128,7 @@ class HideApps(context: Context) : ModPack(context) {
                 .hookMethod("fillGapsWithPrediction")
                 .parameters(Boolean::class.java)
                 .runBefore { param ->
-                    val mPredictedItems =
-                        (param.thisObject.getField("mPredictedItems") as List<*>).toMutableList()
-
+                    val mPredictedItems = (param.thisObject.getField("mPredictedItems") as List<*>).toMutableList()
                     val iterator = mPredictedItems.iterator()
                     iterator.removeMatches()
                 }
@@ -161,14 +137,12 @@ class HideApps(context: Context) : ModPack(context) {
                 .hookMethod("fillGapsWithPrediction")
                 .parameters(Boolean::class.java)
                 .runBefore { param ->
-                    val mPredictedItems =
-                        (param.thisObject.getField("predictedItems") as List<*>).toMutableList()
-
+                    val mPredictedItems = (param.thisObject.getField("predictedItems") as List<*>).toMutableList()
                     val iterator = mPredictedItems.iterator()
                     iterator.removeMatches()
                 }
         }
-
+        
         try {
             defaultAppSearchAlgorithmClass
                 .hookMethod("getTitleMatchResult")
@@ -185,8 +159,7 @@ class HideApps(context: Context) : ModPack(context) {
                     param.args[index] = ArrayList(apps)
                 }
         } catch (_: Throwable) {
-            // Inline changes for testing
-
+            
             launcherModelClass
                 .hookMethod("enqueueModelUpdateTask")
                 .runBefore { param ->
@@ -204,6 +177,7 @@ class HideApps(context: Context) : ModPack(context) {
                             val appsIndex = param2.args.indexOfFirst {
                                 it?.javaClass?.simpleName == allAppsListClass?.simpleName
                             }
+
                             if (appsIndex < 0) return@runBefore
 
                             val apps = param2.args[appsIndex] ?: return@runBefore
@@ -223,9 +197,7 @@ class HideApps(context: Context) : ModPack(context) {
                 updateAllAppsStore(param, appInfoClass!!)
             }
             .runAfter { param ->
-                val mAdapterItems =
-                    (param.thisObject.getField("mAdapterItems") as ArrayList<*>).toMutableList()
-
+                val mAdapterItems = (param.thisObject.getField("mAdapterItems") as ArrayList<*>).toMutableList()
                 val iterator = mAdapterItems.iterator()
 
                 while (iterator.hasNext()) {
@@ -275,11 +247,7 @@ class HideApps(context: Context) : ModPack(context) {
             val iterator = mApps.iterator()
             iterator.removeMatches()
 
-            val appInfoArray = java.lang.reflect.Array.newInstance(
-                appInfoClass,
-                mApps.size
-            ) as Array<*>
-
+            val appInfoArray = java.lang.reflect.Array.newInstance(appInfoClass, mApps.size) as Array<*>
             System.arraycopy(mApps.toTypedArray(), 0, appInfoArray, 0, mApps.size)
 
             mAllAppsStore.setField("mApps", appInfoArray)
@@ -290,7 +258,6 @@ class HideApps(context: Context) : ModPack(context) {
         while (hasNext()) {
             val itemInfo = next()
             val componentName = itemInfo.getComponentName()
-
             if (matchesBlocklist(componentName)) {
                 remove()
             }
@@ -315,10 +282,10 @@ class HideApps(context: Context) : ModPack(context) {
     }
 
     private fun updateLauncherIcons() {
-        activityAllAppsContainerViewInstance.callMethod("onAppsUpdated")
-        hotseatPredictionControllerInstance.callMethodSilently("fillGapsWithPrediction", true)
-        hybridHotseatOrganizerClassInstance.callMethodSilently("fillGapsWithPrediction", true)
-        predictionRowViewInstance.callMethod("applyPredictionApps")
+        activityAllAppsContainerViewInstance?.callMethod("onAppsUpdated")
+        hotseatPredictionControllerInstance?.callMethodSilently("fillGapsWithPrediction", true)
+        hybridHotseatOrganizerClassInstance?.callMethodSilently("fillGapsWithPrediction", true)
+        predictionRowViewInstance?.callMethod("applyPredictionApps")
         reloadLauncher(mContext)
     }
 }
