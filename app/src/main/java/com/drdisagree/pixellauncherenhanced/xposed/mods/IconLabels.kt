@@ -1,6 +1,8 @@
 package com.drdisagree.pixellauncherenhanced.xposed.mods
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import com.drdisagree.pixellauncherenhanced.data.common.Constants.APP_DRAWER_ICON_LABELS
 import com.drdisagree.pixellauncherenhanced.data.common.Constants.DESKTOP_ICON_LABELS
 import com.drdisagree.pixellauncherenhanced.xposed.ModPack
@@ -10,6 +12,7 @@ import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.getExtraFieldSil
 import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.getField
 import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.getFieldSilently
 import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.hookMethod
+import com.drdisagree.pixellauncherenhanced.data.config.AppLabelPreferences
 import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.setExtraField
 import com.drdisagree.pixellauncherenhanced.xposed.mods.toolkit.setField
 import com.drdisagree.pixellauncherenhanced.xposed.utils.XPrefs.Xprefs
@@ -41,12 +44,15 @@ class IconLabels(context: Context) : ModPack(context) {
         fun XC_MethodHook.MethodHookParam.beforeHookedLabel() {
             val mDisplay = thisObject.getField("mDisplay") as Int
             val itemInfo = args[0]
+            val originalTitle = itemInfo.getFieldSilently("title")
+
+            itemInfo.setExtraField("titleText", originalTitle)
+
+            getCustomLabel(itemInfo)?.let {
+                itemInfo.setField("title", it)
+            }
 
             fun removeLabel() {
-                val title = itemInfo.getFieldSilently("title")
-                if (title != null) {
-                    itemInfo.setExtraField("titleText", title)
-                }
                 itemInfo.setField("title", null)
             }
 
@@ -58,21 +64,9 @@ class IconLabels(context: Context) : ModPack(context) {
         }
 
         fun XC_MethodHook.MethodHookParam.afterHookedLabel() {
-            val mDisplay = thisObject.getField("mDisplay") as Int
             val itemInfo = args[0]
-
-            fun reAddLabel() {
-                val title = itemInfo.getExtraFieldSilently("titleText")
-                if (title != null) {
-                    itemInfo.setField("title", title)
-                }
-            }
-
-            if (mDisplay.isDesktop() && !showDesktopLabels) {
-                reAddLabel()
-            } else if (mDisplay.isDrawer() && !showDrawerLabels) {
-                reAddLabel()
-            }
+            val originalTitle = itemInfo.getExtraFieldSilently("titleText")
+            itemInfo.setField("title", originalTitle)
         }
 
         try {
@@ -89,6 +83,21 @@ class IconLabels(context: Context) : ModPack(context) {
                 .runBefore { param -> param.beforeHookedLabel() }
                 .runAfter { param -> param.afterHookedLabel() }
         }
+    }
+
+    private fun getCustomLabel(itemInfo: Any?): CharSequence? {
+        return itemInfo?.getComponentName()?.let { componentName ->
+            Xprefs.getString(AppLabelPreferences.getCustomLabelKey(componentName), null)
+                ?.takeIf { it.isNotBlank() }
+        }
+    }
+
+    private fun Any?.getComponentName(): ComponentName? {
+        if (this == null) return null
+        return getFieldSilently("componentName") as? ComponentName
+            ?: getFieldSilently("mComponentName") as? ComponentName
+            ?: (getFieldSilently("intent") as? Intent)?.component
+            ?: (getFieldSilently("mIntent") as? Intent)?.component
     }
 
     private fun Int.isDesktop(): Boolean {

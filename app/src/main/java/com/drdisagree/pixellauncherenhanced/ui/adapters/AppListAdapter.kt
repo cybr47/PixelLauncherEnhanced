@@ -16,8 +16,11 @@ import com.drdisagree.pixellauncherenhanced.data.model.AppInfoModel
 import com.drdisagree.pixellauncherenhanced.utils.MiscUtils.dpToPx
 import com.google.android.material.materialswitch.MaterialSwitch
 
-class AppListAdapter(private val appList: List<AppInfoModel>) :
-    RecyclerView.Adapter<AppListAdapter.ViewHolder>() {
+class AppListAdapter(
+    private val appList: List<AppInfoModel>,
+    private val showSwitch: Boolean = true,
+    private val onItemClick: ((AppInfoModel) -> Unit)? = null
+) : RecyclerView.Adapter<AppListAdapter.ViewHolder>() {
 
     private var context: Context? = null
 
@@ -36,38 +39,48 @@ class AppListAdapter(private val appList: List<AppInfoModel>) :
 
         holder.appIcon.setImageDrawable(appInfo.appIcon)
         holder.appName.text = appInfo.appName
-        holder.packageName.text = appInfo.packageName
-        holder.switchView.isChecked = appInfo.isSelected
+        holder.packageName.text = appInfo.subtitle ?: appInfo.packageName
+        holder.switchView.visibility = if (showSwitch) View.VISIBLE else View.GONE
 
-        holder.switchView.setOnCheckedChangeListener { compoundButton, isChecked ->
-            if (!compoundButton.isPressed) return@setOnCheckedChangeListener
+        if (showSwitch) {
+            holder.switchView.setOnCheckedChangeListener(null)
+            holder.switchView.isChecked = appInfo.isSelected
+            holder.switchView.setOnCheckedChangeListener { compoundButton, isChecked ->
+                if (!compoundButton.isPressed) return@setOnCheckedChangeListener
 
-            appInfo.isSelected = isChecked
-            val appBlockList = RPrefs.getStringSet(APP_BLOCK_LIST, emptySet())!!.toMutableList()
+                appInfo.isSelected = isChecked
+                val appBlockList = RPrefs.getStringSet(APP_BLOCK_LIST, emptySet())!!.toMutableList()
 
-            if (isChecked) {
-                if (!appBlockList.contains(appInfo.packageName)) {
-                    appBlockList.add(appInfo.packageName)
+                if (isChecked) {
+                    if (!appBlockList.contains(appInfo.packageName)) {
+                        appBlockList.add(appInfo.packageName)
+                    }
+                } else {
+                    appBlockList.remove(appInfo.packageName)
                 }
-            } else {
-                appBlockList.remove(appInfo.packageName)
+                RPrefs.putStringSet(APP_BLOCK_LIST, appBlockList.toSet())
             }
-            RPrefs.putStringSet(APP_BLOCK_LIST, appBlockList.toSet())
+        } else {
+            holder.switchView.setOnCheckedChangeListener(null)
         }
 
         holder.container.setOnClickListener {
-            appInfo.isSelected = !appInfo.isSelected
-            holder.switchView.isChecked = appInfo.isSelected
+            if (showSwitch) {
+                appInfo.isSelected = !appInfo.isSelected
+                holder.switchView.isChecked = appInfo.isSelected
 
-            val appBlockList = RPrefs.getStringSet(APP_BLOCK_LIST, emptySet())!!.toMutableList()
-            if (appInfo.isSelected) {
-                if (!appBlockList.contains(appInfo.packageName)) {
-                    appBlockList.add(appInfo.packageName)
+                val appBlockList = RPrefs.getStringSet(APP_BLOCK_LIST, emptySet())!!.toMutableList()
+                if (appInfo.isSelected) {
+                    if (!appBlockList.contains(appInfo.packageName)) {
+                        appBlockList.add(appInfo.packageName)
+                    }
+                } else {
+                    appBlockList.remove(appInfo.packageName)
                 }
-            } else {
-                appBlockList.remove(appInfo.packageName)
+                RPrefs.putStringSet(APP_BLOCK_LIST, appBlockList.toSet())
             }
-            RPrefs.putStringSet(APP_BLOCK_LIST, appBlockList.toSet())
+
+            onItemClick?.invoke(appInfo)
         }
 
         setItemBackground(holder)
@@ -76,7 +89,9 @@ class AppListAdapter(private val appList: List<AppInfoModel>) :
     override fun onViewAttachedToWindow(holder: ViewHolder) {
         super.onViewAttachedToWindow(holder)
 
-        holder.switchView.isChecked = appList[holder.getBindingAdapterPosition()].isSelected
+        if (showSwitch) {
+            holder.switchView.isChecked = appList[holder.getBindingAdapterPosition()].isSelected
+        }
 
         setItemBackground(holder)
     }

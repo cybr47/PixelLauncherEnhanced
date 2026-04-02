@@ -3,6 +3,7 @@ package com.drdisagree.pixellauncherenhanced.ui.preferences
 import android.content.Context
 import android.util.AttributeSet
 import android.view.View
+import android.widget.ImageView
 import androidx.core.content.withStyledAttributes
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
@@ -52,6 +53,13 @@ class PreferenceMainMenu : Preference {
         super.onBindViewHolder(holder)
 
         holder.findViewById(R.id.end_arrow)?.visibility = if (showArrow) View.VISIBLE else View.GONE
+
+        val iconView = holder.itemView.findViewById(android.R.id.icon) as? ImageView
+        holder.itemView.findViewById<View>(R.id.icon_frame)?.visibility = if (iconView?.drawable != null) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
 
         setFirstAndLastItemMargin(holder)
         setBackgroundResource(holder)

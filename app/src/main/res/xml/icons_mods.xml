@@ -44,6 +44,14 @@
             app:tickInterval="1"
             app:valueFormat="%" />
 
+        <com.drdisagree.pixellauncherenhanced.ui.preferences.PreferenceMainMenu
+            android:key="edit_app_labels"
+            android:title="@string/edit_app_labels_title"
+            android:summary="@string/edit_app_labels_summary"
+            app:fragment="com.drdisagree.pixellauncherenhanced.ui.fragments.EditAppLabels"
+            app:iconSpaceReserved="false"
+            app:showArrow="true" />
+
     </com.drdisagree.pixellauncherenhanced.ui.preferences.PreferenceCategory>
 
     <com.drdisagree.pixellauncherenhanced.ui.preferences.PreferenceCategory

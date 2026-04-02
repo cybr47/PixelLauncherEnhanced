@@ -16,6 +16,15 @@
     <string name="understood">Understood</string>
     <string name="settings_title">Settings</string>
     <string name="search_hint">Search…</string>
+    <string name="edit_label">Edit</string>
+    <string name="edit_app_labels_title">Edit app labels</string>
+    <string name="edit_app_labels_summary">Apply custom labels to apps</string>
+    <string name="current_custom_label_summary">Current label: %1$s</string>
+    <string name="hint_custom_label">Set app label</string>
+    <string name="label_saved">Label saved</string>
+    <string name="label_reset">Label reset</string>
+    <string name="save">Save</string>
+    <string name="reset">Reset</string>
 
     <string name="root_connection_failed_title">Root connection failed</string>
     <string name="root_connection_failed_desc">Unable to connect to root service. Please grant root access and try again.</string>

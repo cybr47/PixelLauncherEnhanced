@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ComponentName
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
@@ -13,6 +14,8 @@ import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -20,7 +23,7 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.drdisagree.pixellauncherenhanced.R
 import com.drdisagree.pixellauncherenhanced.data.common.Constants.ACTION_APP_LIST_UPDATED
-import com.drdisagree.pixellauncherenhanced.data.common.Constants.APP_BLOCK_LIST
+import com.drdisagree.pixellauncherenhanced.data.config.AppLabelPreferences
 import com.drdisagree.pixellauncherenhanced.data.config.RPrefs
 import com.drdisagree.pixellauncherenhanced.data.model.AppInfoModel
 import com.drdisagree.pixellauncherenhanced.databinding.FragmentHiddenAppsBinding
@@ -28,6 +31,9 @@ import com.drdisagree.pixellauncherenhanced.ui.adapters.AppListAdapter
 import com.drdisagree.pixellauncherenhanced.utils.AppUtils
 import com.drdisagree.pixellauncherenhanced.utils.MiscUtils.dpToPx
 import com.drdisagree.pixellauncherenhanced.utils.MiscUtils.setupToolbar
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -35,11 +41,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-
-class HiddenApps : Fragment() {
+class EditAppLabels : Fragment() {
 
     private lateinit var binding: FragmentHiddenAppsBinding
-    private var appList: List<AppInfoModel>? = null
+    private var appList: MutableList<AppInfoModel>? = null
     private var adapter: AppListAdapter? = null
 
     private val packageUpdateReceiver: BroadcastReceiver = object : BroadcastReceiver() {
@@ -49,6 +54,7 @@ class HiddenApps : Fragment() {
             }
         }
     }
+
     private val textWatcher: TextWatcher = object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {
         }
@@ -76,7 +82,7 @@ class HiddenApps : Fragment() {
 
         setupToolbar(
             requireContext() as AppCompatActivity,
-            R.string.fragment_hidden_apps_title,
+            R.string.edit_app_labels_title,
             true,
             binding.header.toolbar,
             binding.header.collapsingToolbar
@@ -116,14 +122,20 @@ class HiddenApps : Fragment() {
         binding.search.removeTextChangedListener(textWatcher)
 
         CoroutineScope(Dispatchers.IO).launch {
-            appList = AppUtils.getAllLaunchableApps().map { appInfo ->
+            val allApps = AppUtils.getAllLaunchableApps()
+            appList = allApps.map { appInfo ->
                 appInfo.apply {
-                    isSelected = RPrefs.getStringSet(APP_BLOCK_LIST, emptySet())!!.contains(packageName)
+                    subtitle = AppLabelPreferences.getCustomLabel(RPrefs, componentName ?: return@map null)
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { getString(R.string.current_custom_label_summary, it) }
+                        ?: packageName
                 }
-            }.toMutableList().apply {
-                sortWith(compareBy<AppInfoModel> { !it.isSelected }.thenBy { it.appName.lowercase() })
+            }.filterNotNull().toMutableList()
+            adapter = AppListAdapter(appList!!, showSwitch = false) { appInfo ->
+                if (appInfo.componentName != null) {
+                    showEditDialog(appInfo)
+                }
             }
-            adapter = AppListAdapter(appList!!)
             delay(300)
 
             withContext(Dispatchers.Main) {
@@ -142,7 +154,7 @@ class HiddenApps : Fragment() {
                         filterList(binding.search.text.toString().trim { it <= ' ' })
                     }
                 } catch (_: Exception) {
-                    // Fragment was not attached to activity
+
                 }
             }
         }
@@ -188,8 +200,62 @@ class HiddenApps : Fragment() {
         filteredList.addAll(startsWithPackageNameList)
         filteredList.addAll(containsPackageNameList)
 
-        adapter = AppListAdapter(filteredList)
+        adapter = AppListAdapter(filteredList, showSwitch = false) { appInfo ->
+            if (appInfo.componentName != null) {
+                showEditDialog(appInfo)
+            }
+        }
         binding.recyclerView.adapter = adapter
+    }
+
+    private fun showEditDialog(appInfo: AppInfoModel) {
+        val componentName = appInfo.componentName ?: return
+        val currentLabel = AppLabelPreferences.getCustomLabel(RPrefs, componentName)
+            ?.takeIf { it.isNotBlank() }
+            ?: appInfo.appName
+
+        val dialogView = LayoutInflater.from(requireContext()).inflate(
+            R.layout.dialog_edit_app_label,
+            null,
+            false
+        )
+
+        val iconView = dialogView.findViewById<ImageView>(R.id.edit_label_icon)
+        val input = dialogView.findViewById<TextInputEditText>(R.id.edit_label_input)
+        val resetButton = dialogView.findViewById<MaterialButton>(R.id.edit_label_reset)
+        val saveButton = dialogView.findViewById<MaterialButton>(R.id.edit_label_save)
+
+        iconView.setImageDrawable(appInfo.appIcon)
+        input.setText(currentLabel)
+        input.setSelection(currentLabel.length)
+
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setView(dialogView)
+            .create()
+
+        resetButton.setOnClickListener {
+            AppLabelPreferences.removeCustomLabel(RPrefs.edit(), componentName)
+            appInfo.subtitle = appInfo.packageName
+            adapter?.notifyItemChanged(appList?.indexOf(appInfo) ?: 0)
+            Toast.makeText(requireContext(), getString(R.string.label_reset), Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+        }
+
+        saveButton.setOnClickListener {
+            val newLabel = input.text?.toString()?.trim()
+            if (newLabel.isNullOrEmpty()) {
+                AppLabelPreferences.removeCustomLabel(RPrefs.edit(), componentName)
+                appInfo.subtitle = appInfo.packageName
+            } else {
+                AppLabelPreferences.setCustomLabel(RPrefs.edit(), componentName, newLabel)
+                appInfo.subtitle = getString(R.string.current_custom_label_summary, newLabel)
+            }
+            adapter?.notifyItemChanged(appList?.indexOf(appInfo) ?: 0)
+            Toast.makeText(requireContext(), getString(R.string.label_saved), Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -218,7 +284,7 @@ class HiddenApps : Fragment() {
         try {
             requireContext().unregisterReceiver(packageUpdateReceiver)
         } catch (_: Exception) {
-            // Receiver was not registered
+        
         }
         super.onDestroy()
     }
@@ -232,5 +298,4 @@ class HiddenApps : Fragment() {
         }
         return super.onOptionsItemSelected(item)
     }
-
 }
